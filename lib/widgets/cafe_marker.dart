@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import '../models/cafe_info.dart';
 import '../services/wait_time_predictor.dart';
+import '../services/distance_service.dart';
 
 class CafeMarkerBuilder {
   static List<Marker> buildMarkers(
@@ -49,6 +50,25 @@ class CafeMarkerBuilder {
                       color: Colors.white,
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                // Distance indicator (if available)
+                if (cafe.distance != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: DistanceService.getDistanceColor(
+                        DistanceService.getDistanceCategory(cafe.distance!.distanceMeters),
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      cafe.distance!.distanceText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 // Wait time indicator

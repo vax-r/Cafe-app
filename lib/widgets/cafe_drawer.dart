@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/cafe_info.dart';
 import '../services/wait_time_predictor.dart';
+import '../services/distance_service.dart';
 
 class CafeDrawer extends StatelessWidget {
   final List<CafeInfo> cafes;
@@ -35,7 +36,7 @@ class CafeDrawer extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Tap a cafe to view details',
+                  'Sorted by distance & rating',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
@@ -59,9 +60,35 @@ class CafeDrawer extends StatelessWidget {
                       );
                       
                       return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: _getRatingColor(cafe.rating),
-                          child: const Icon(Icons.coffee, color: Colors.white),
+                        leading: Stack(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: _getRatingColor(cafe.rating),
+                              child: const Icon(Icons.coffee, color: Colors.white),
+                            ),
+                            if (cafe.distance != null)
+                              Positioned(
+                                right: -2,
+                                top: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: DistanceService.getDistanceColor(
+                                      DistanceService.getDistanceCategory(cafe.distance!.distanceMeters),
+                                    ),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 1),
+                                  ),
+                                  child: Icon(
+                                    DistanceService.getDistanceIcon(
+                                      DistanceService.getDistanceCategory(cafe.distance!.distanceMeters),
+                                    ),
+                                    size: 12,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         title: Text(cafe.name),
                         subtitle: Column(
@@ -72,6 +99,7 @@ class CafeDrawer extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(height: 2),
                             Row(
                               children: [
                                 if (cafe.rating != null) ...[
@@ -79,9 +107,29 @@ class CafeDrawer extends StatelessWidget {
                                   const SizedBox(width: 4),
                                   Text('${cafe.rating!.toStringAsFixed(1)} • '),
                                 ],
+                                if (cafe.distance != null) ...[
+                                  Icon(
+                                    Icons.near_me,
+                                    size: 12,
+                                    color: DistanceService.getDistanceColor(
+                                      DistanceService.getDistanceCategory(cafe.distance!.distanceMeters),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '${cafe.distance!.distanceText} • ',
+                                    style: TextStyle(
+                                      color: DistanceService.getDistanceColor(
+                                        DistanceService.getDistanceCategory(cafe.distance!.distanceMeters),
+                                      ),
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                                 Icon(
                                   Icons.access_time,
-                                  size: 14,
+                                  size: 12,
                                   color: waitInfo.busyColor,
                                 ),
                                 const SizedBox(width: 2),
@@ -90,10 +138,20 @@ class CafeDrawer extends StatelessWidget {
                                   style: TextStyle(
                                     color: waitInfo.busyColor,
                                     fontWeight: FontWeight.w500,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ],
                             ),
+                            if (cafe.distance != null)
+                              Text(
+                                cafe.distance!.walkingTimeText,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
                           ],
                         ),
                         trailing: cafe.photos.isNotEmpty
@@ -153,7 +211,7 @@ class CafeDrawer extends StatelessWidget {
                   ? Icons.star_half
                   : Icons.star_border,
           color: Colors.orange,
-          size: 16,
+          size: 12,
         );
       }),
     );

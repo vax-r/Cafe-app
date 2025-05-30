@@ -4,10 +4,13 @@ import 'package:latlong2/latlong.dart';
 import '../models/cafe_info.dart';
 import '../services/cafe_service.dart';
 import '../services/location_service.dart';
+import '../services/distance_service.dart';
+import '../services/wait_time_predictor.dart';
 import '../widgets/cafe_marker.dart';
 import '../widgets/cafe_info_card.dart';
 import '../widgets/cafe_drawer.dart';
 import '../widgets/user_location_marker.dart';
+import '../widgets/cafe_sort_widget.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -26,11 +29,13 @@ class _MapScreenState extends State<MapScreen> {
   double _currentZoom = 13.0;
   
   List<CafeInfo> _cafes = [];
+  List<CafeInfo> _sortedCafes = [];
   bool _isLoading = false;
   bool _isLoadingLocation = false;
   CafeInfo? _selectedCafe;
   UserLocation? _userLocation;
   LocationStatus _locationStatus = LocationStatus.unknown;
+  SortMode _currentSortMode = SortMode.distance;
 
   @override
   void initState() {
@@ -97,7 +102,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
               // Cafe markers
               MarkerLayer(
-                markers: CafeMarkerBuilder.buildMarkers(_cafes, _onMarkerTap),
+                markers: CafeMarkerBuilder.buildMarkers(_sortedCafes, _onMarkerTap),
               ),
             ],
           ),
@@ -121,6 +126,18 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           
+          // Sort Controls
+          if (_sortedCafes.isNotEmpty)
+            Positioned(
+              top: 20,
+              left: 20,
+              child: CafeSortWidget(
+                currentMode: _currentSortMode,
+                onSortChanged: _onSortModeChanged,
+                hasUserLocation: _userLocation != null,
+              ),
+            ),
+          
           // Location status indicator
           Positioned(
             top: 20,
@@ -137,6 +154,21 @@ class _MapScreenState extends State<MapScreen> {
               top: 70,
               right: 20,
               child: UserLocationMarker.buildLocationAccuracyInfo(_userLocation!),
+            ),
+
+          // Cafe stats bar
+          if (_sortedCafes.isNotEmpty)
+            Positioned(
+              top: 80,
+              left: 20,
+              right: _userLocation != null ? 200 : 80,
+              child: CafeStatsBar(
+                totalCafes: _sortedCafes.length,
+                nearestDistance: _userLocation != null && _sortedCafes.isNotEmpty && _sortedCafes.first.distance != null
+                    ? _sortedCafes.first.distance!.distanceText
+                    : null,
+                averageRating: _calculateAverageRating(),
+              ),
             ),
           
           // Cafe info card
@@ -157,7 +189,7 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
       drawer: CafeDrawer(
-        cafes: _cafes,
+        cafes: _sortedCafes,
         onCafeSelected: _onCafeSelected,
       ),
       floatingActionButton: Column(
@@ -182,7 +214,7 @@ class _MapScreenState extends State<MapScreen> {
           const SizedBox(height: 10),
           FloatingActionButton(
             heroTag: "search",
-            onPressed: _searchNearbycafes,
+            onPressed: _searchNearbyCafes,
             tooltip: 'Find Nearby Cafes',
             backgroundColor: Colors.brown,
             child: const Icon(Icons.search, color: Colors.white),
@@ -190,6 +222,78 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
     );
+  }
+
+  void _onSortModeChanged(SortMode newMode) {
+    setState(() {
+      _currentSortMode = newMode;
+    });
+    _applySorting();
+  }
+
+  void _applySorting() {
+    setState(() {
+      _sortedCafes = List.from(_cafes);
+      
+      switch (_currentSortMode) {
+        case SortMode.distance:
+          if (_userLocation != null) {
+            _sortedCafes.sort((a, b) {
+              if (a.distance == null && b.distance == null) return 0;
+              if (a.distance == null) return 1;
+              if (b.distance == null) return -1;
+              return a.distance!.distanceMeters.compareTo(b.distance!.distanceMeters);
+            });
+          }
+          break;
+        case SortMode.rating:
+          _sortedCafes.sort((a, b) {
+            if (a.rating == null && b.rating == null) return 0;
+            if (a.rating == null) return 1;
+            if (b.rating == null) return -1;
+            return b.rating!.compareTo(a.rating!);
+          });
+          break;
+        case SortMode.waitTime:
+          _sortedCafes.sort((a, b) {
+            final waitTimeA = WaitTimePredictor.predictWaitTime(
+              cafeName: a.name,
+              currentTime: DateTime.now(),
+            );
+            final waitTimeB = WaitTimePredictor.predictWaitTime(
+              cafeName: b.name,
+              currentTime: DateTime.now(),
+            );
+            return waitTimeA.estimatedMinutes.compareTo(waitTimeB.estimatedMinutes);
+          });
+          break;
+      }
+    });
+  }
+
+  double? _calculateAverageRating() {
+    final cafesWithRatings = _sortedCafes.where((cafe) => cafe.rating != null).toList();
+    if (cafesWithRatings.isEmpty) return null;
+    
+    final sum = cafesWithRatings.fold<double>(0, (sum, cafe) => sum + cafe.rating!);
+    return sum / cafesWithRatings.length;
+  }
+
+  void _updateCafeDistances() {
+    if (_userLocation == null) return;
+
+    setState(() {
+      _cafes = _cafes.map((cafe) {
+        final distance = DistanceService.calculateCafeDistance(
+          cafe.id,
+          _userLocation!.position,
+          cafe.location,
+        );
+        return cafe.copyWithDistance(distance);
+      }).toList();
+    });
+    
+    _applySorting();
   }
 
   void _onMarkerTap(CafeInfo cafe) {
@@ -222,6 +326,9 @@ class _MapScreenState extends State<MapScreen> {
       });
 
       if (userLocation != null) {
+        // Update distances for all cafes
+        _updateCafeDistances();
+        
         // Center map on user location
         _mapController.move(userLocation.position, 15.0);
         
@@ -305,7 +412,7 @@ class _MapScreenState extends State<MapScreen> {
     _mapController.move(_center, _currentZoom);
   }
 
-  Future<void> _searchNearbycafes() async {
+  Future<void> _searchNearbyCafes() async {
     if (_userLocation != null) {
       await _searchCafes(_userLocation!.position);
     } else {
@@ -340,6 +447,13 @@ class _MapScreenState extends State<MapScreen> {
         _cafes = cafes;
         _isLoading = false;
       });
+
+      // Update distances if user location is available
+      if (_userLocation != null) {
+        _updateCafeDistances();
+      } else {
+        _applySorting();
+      }
 
       if (cafes.isNotEmpty && mounted) {
         String locationDesc = _userLocation != null ? 'nearby' : 'in this area';
