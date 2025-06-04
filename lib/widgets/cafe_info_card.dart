@@ -4,6 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/cafe_info.dart';
 import '../models/wait_time_info.dart';
 import '../services/wait_time_predictor.dart';
+import './cafe_review_form.dart';
+
 
 class CafeInfoCard extends StatelessWidget {
   final CafeInfo cafe;
@@ -60,6 +62,25 @@ class CafeInfoCard extends StatelessWidget {
                   _buildReviewsSection(),
                 ],
                 const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => CafeReviewForm(
+                        cafeName: cafe.name,
+                        onSubmit: (text, rating) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Review has been Sent!')),
+                          );
+                          // here for send to backend 
+                        },
+                      ),
+                    );
+                  },
+                  child: const Text('✒️Write review'),
+                ),
                 _buildCoordinates(),
               ],
             ),
