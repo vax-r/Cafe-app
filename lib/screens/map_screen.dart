@@ -6,6 +6,7 @@ import '../services/cafe_service.dart';
 import '../services/location_service.dart';
 import '../services/distance_service.dart';
 import '../services/wait_time_predictor.dart';
+import '../services/review_service.dart';
 import '../widgets/cafe_marker.dart';
 import '../widgets/cafe_info_card.dart';
 import '../widgets/cafe_drawer.dart';
@@ -40,6 +41,8 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize review service with sample data
+    ReviewService.instance.generateSampleReviews();
     _initializeApp();
   }
 
